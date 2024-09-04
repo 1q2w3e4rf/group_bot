@@ -21,6 +21,28 @@ def kick_user(message):
     else:
         bot.reply_to(message, "Эта команда должна быть использована в ответ на сообщение пользователя, которого вы хотите кикнуть.")
 
+@bot.message_handler(commands=['rank'])
+def set_rank(message):
+    if message.reply_to_message:
+        chat_id = message.chat.id
+        user_id = message.reply_to_message.from_user.id
+        rank = message.text.split()[1:]
+        
+        if bot.get_chat_member(chat_id, message.from_user.id).status in ['administrator', 'creator']:
+            if rank:
+                rank = ' '.join(rank)
+                if chat_id not in chat_history:
+                    chat_history[chat_id] = {}
+                if user_id not in chat_history[chat_id]:
+                    chat_history[chat_id][user_id] = {}
+                chat_history[chat_id][user_id]['rank'] = rank
+                bot.reply_to(message, f"Ранг пользователя {message.reply_to_message.from_user.username} установлен как {rank}")
+            else:
+                bot.reply_to(message, "Укажите ранг")
+        else:
+            bot.reply_to(message, "Только администраторы могут присваивать ранги")
+    else:
+        bot.reply_to(message, "Эта команда должна быть использована в ответ на сообщение пользователя, которому вы хотите присвоить ранг")
 @bot.message_handler(commands=['mute'])
 def mute_user(message):
     if message.reply_to_message:
@@ -64,9 +86,12 @@ def stats(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
     if chat_id not in chat_history:
-        chat_history[chat_id] = []
-    user_messages = sum(1 for msg in chat_history[chat_id] if msg.from_user.id == user_id)
-    bot.reply_to(message, f"Всего сообщений в группе: {len(chat_history[chat_id])}\nСообщений от @{message.from_user.username}: {user_messages}")
+        chat_history[chat_id] = {}
+    if user_id not in chat_history[chat_id]:
+        chat_history[chat_id][user_id] = {'messages': 0, 'rank': 'Не установлен'}
+    user_messages = chat_history[chat_id][user_id]['messages']
+    rank = chat_history[chat_id][user_id]['rank']
+    bot.reply_to(message, f"Всего сообщений в группе: {sum(user['messages'] for user in chat_history[chat_id].values())}\nСообщений от @{message.from_user.username}: {user_messages}\nРанг: {rank}")
 
 def check_message(message):
     for word in words:
@@ -77,12 +102,15 @@ def check_message(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     chat_id = message.chat.id
+    user_id = message.from_user.id
     if chat_id not in chat_history:
-        chat_history[chat_id] = []
-    chat_history[chat_id].append(message)
+        chat_history[chat_id] = {}
+    if user_id not in chat_history[chat_id]:
+        chat_history[chat_id][user_id] = {'messages': 0, 'rank': 'Не установлен'}
+    chat_history[chat_id][user_id]['messages'] += 1
     
     if check_message(message):
         bot.kick_chat_member(message.chat.id, message.from_user.id)
         bot.send_message(message.chat.id, f"Пользователь {message.from_user.username} был удален из чата за использование запрещенных слов")
-    
+
 bot.infinity_polling()
